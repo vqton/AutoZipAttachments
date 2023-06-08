@@ -39,7 +39,7 @@ namespace AutoZipAttachments
                     MessageBox.Show("The recipient vuquangton@outlook.com could not be resolved.");
                 }
 
-                var s = ("vuquangton@gmail.com; vuquangton@outlook.com; vuquangton@ymail.com; hunsforce@yahoo.com;tonvqsharing@gmail.com").Trim().Split(';');
+                var s = ("vuquangton@outlook.com;tonvqsgc@outlook.com;vuquangton@ymail.com; hunsforce@yahoo.com; tonvqsharing@gmail.com").Trim().Split(';');
                 for (int i = 0; i < s.Length; i++)
                 {
                     if (String.IsNullOrEmpty(s[i]))
@@ -66,7 +66,9 @@ namespace AutoZipAttachments
 
                     if (attachmentsToCompress.Any())
                     {
-                        string zipFile = tempPath + "\\attachments.zip";
+                        //string zipFile = tempPath + "\\attachments.zip";
+                        string sDateTime = DateTime.Now.ToString("yyyy_MM_dd_hh_mm");
+                        string zipFile = tempPath + String.Format("\\attachments_{0}.zip",sDateTime);
                         using (ZipOutputStream zipStream = new ZipOutputStream(File.Create(zipFile)))
                         {
                             zipStream.SetLevel(9);

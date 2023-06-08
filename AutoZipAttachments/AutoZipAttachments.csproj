@@ -258,7 +258,10 @@
     <ManifestKeyFile>AutoZipAttachments_TemporaryKey.pfx</ManifestKeyFile>
   </PropertyGroup>
   <PropertyGroup>
-    <ManifestCertificateThumbprint>6921A40D3979854389E5D8562EC04D7D56D02558</ManifestCertificateThumbprint>
+    <ManifestCertificateThumbprint>A2B3B6B204C000B4D165E99015032FBD177B37A3</ManifestCertificateThumbprint>
+  </PropertyGroup>
+  <PropertyGroup>
+    <SignAssembly>false</SignAssembly>
   </PropertyGroup>
   <!-- Include the build rules for a C# project. -->
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
