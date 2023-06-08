@@ -1,5 +1,3 @@
-# AutoZipAttachments
-Small Auto Zip Attachments Outlook Add-in
 # AutoZipAttachment Outlook Add-in
 This Outlook add-in is built in C# and automatically compresses file attachments, copies the sender, and BCCs an email address for backup purposes.
 ## Key Features
