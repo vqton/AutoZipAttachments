@@ -1,112 +1,38 @@
 ﻿using System;
-using System.IO;
+using System.Collections.Generic;
 using System.Linq;
-using System.Windows.Forms;
-using Microsoft.Office.Interop.Outlook;
-using ICSharpCode.SharpZipLib.Zip;
+using System.Text;
+using System.Xml.Linq;
+using Outlook = Microsoft.Office.Interop.Outlook;
+using Office = Microsoft.Office.Core;
 
 namespace AutoZipAttachments
 {
     public partial class ThisAddIn
     {
+        private IEmailSender _emailSender;
         private void ThisAddIn_Startup(object sender, System.EventArgs e)
         {
             //Application.ItemSend += new ApplicationEvents_11_ItemSendEventHandler(CompressAttachments);
+            _emailSender = new EmailSender(); 
             Application.ItemSend += Application_ItemSend;
         }
-        private bool IsCompressibleFile(Attachment attachment)
-        {
-            string[] compressibleExtensions = { ".doc", ".docx", ".xls", ".xlsx", ".pdf" };
-            return compressibleExtensions.Contains(Path.GetExtension(attachment.FileName));
-        }
-
-        private bool IsSignatureImage(Attachment attachment)
-        {
-            string[] signatureImageExtensions = { ".png", ".jpg", ".jpeg" };
-            return signatureImageExtensions.Contains(Path.GetExtension(attachment.FileName));
-        }
+        
         private void Application_ItemSend(object Item, ref bool cancel)
         {
-            MailItem mailItem = Item as MailItem;
-
-            if (mailItem != null )
+            Outlook.MailItem mailItem = Item as Outlook.MailItem;
+            if (mailItem != null)
             {
-                Recipient ccRecipient = mailItem.Recipients.Add("ton-vq@saigonco-op.com.vn");
-                ccRecipient.Type = (int)OlMailRecipientType.olCC;
-                ccRecipient.Resolve();
-                if (!ccRecipient.Resolved)
+                if (mailItem.Recipients.Count > 0)
                 {
-                    MessageBox.Show("The recipient vuquangton@outlook.com could not be resolved.");
-                }
-
-                var s = ("vuquangton@outlook.com;tonvqsgc@outlook.com;vuquangton@ymail.com; hunsforce@yahoo.com; tonvqsharing@gmail.com").Trim().Split(';');
-                for (int i = 0; i < s.Length; i++)
-                {
-                    if (String.IsNullOrEmpty(s[i]))
-                        return;
-                    Recipient backupRecipient = mailItem.Recipients.Add(s[i]);
-                    backupRecipient.Type = (int)OlMailRecipientType.olBCC;
-                    backupRecipient.Resolve();
-                    if (!backupRecipient.Resolved)
+                    if (mailItem.Recipients.Count > 0)
                     {
-                        MessageBox.Show("The backup recipient " + s[i] + " could not be resolved.");
+                        _emailSender.AddCC(mailItem);
+
+                        // Add the backup group to the BCC field
+                        _emailSender.AddBCC(mailItem, "Backup Group");
                     }
                 }
-
-
-                if (mailItem.Attachments.Count > 0)
-                {
-                    string tempFile = Path.GetTempFileName();
-                    string tempPath = Path.GetDirectoryName(tempFile) + "\\" + Path.GetFileNameWithoutExtension(tempFile);
-                    Directory.CreateDirectory(tempPath);
-
-                    var attachmentsToCompress = mailItem.Attachments.Cast<Attachment>()
-                        .Where(attachment => !IsSignatureImage(attachment))
-                        .Where(attachment => IsCompressibleFile(attachment));
-
-                    if (attachmentsToCompress.Any())
-                    {
-                        //string zipFile = tempPath + "\\attachments.zip";
-                        string sDateTime = DateTime.Now.ToString("yyyy_MM_dd_hh_mm");
-                        string zipFile = tempPath + String.Format("\\attachments_{0}.zip",sDateTime);
-                        using (ZipOutputStream zipStream = new ZipOutputStream(File.Create(zipFile)))
-                        {
-                            zipStream.SetLevel(9);
-                            foreach (Attachment attachment in attachmentsToCompress)
-                            {
-                                string fileName = tempPath + "\\" + attachment.FileName;
-                                attachment.SaveAsFile(fileName);
-
-                                ZipEntry entry = new ZipEntry(attachment.FileName);
-                                entry.DateTime = DateTime.Now;
-                                entry.IsUnicodeText = true;
-                                zipStream.PutNextEntry(entry);
-
-                                using (FileStream fs = File.OpenRead(fileName))
-                                {
-                                    byte[] buffer = new byte[fs.Length];
-                                    fs.Read(buffer, 0, buffer.Length);
-                                    zipStream.Write(buffer, 0, buffer.Length);
-                                }
-                            }
-                        }
-
-                        //mailItem.Attachments.Clear();
-
-                        for (int i = mailItem.Attachments.Count - 1; i >= 0; i--)
-                        {
-                            mailItem.Attachments.Remove(i);
-                        }
-
-
-
-                        mailItem.Attachments.Add(zipFile);
-                    }
-
-                    Directory.Delete(tempPath, true);
-                } 
-                          
-
             }
         }
 
