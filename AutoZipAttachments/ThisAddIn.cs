@@ -1,4 +1,5 @@
 ﻿using Microsoft.Office.Interop.Outlook;
+using System.Collections.Generic;
 using Outlook = Microsoft.Office.Interop.Outlook;
 
 namespace AutoZipAttachments
@@ -10,17 +11,21 @@ namespace AutoZipAttachments
         {
             //Application.ItemSend += new ApplicationEvents_11_ItemSendEventHandler(CompressAttachments);
             _emailSender = new EmailSender();
+
+
             Application.ItemSend += Application_ItemSend;
         }
         private void FormatEmail(MailItem mail)
         {
-            if (mail.BodyFormat != OlBodyFormat.olFormatHTML)
+            if (mail.BodyFormat == Outlook.OlBodyFormat.olFormatHTML)
             {
-                mail.BodyFormat = OlBodyFormat.olFormatHTML;
+                string body = mail.HTMLBody;
+                string formattedBody = $@"
+                    <div style=""font-family: Arial; line-height: 1.5;"">
+                        {body}
+                    </div>";
+                mail.HTMLBody = formattedBody;
             }
-            string htmlBody = "<html><head><style>body { font-family: Arial; font-size: 13px; line-height: 1.5; }</style></head><body>" + mail.HTMLBody + "</body></html>";
-            mail.HTMLBody = htmlBody;
-            mail.Save();
         }
         private void Application_ItemSend(object Item, ref bool cancel)
         {
@@ -38,7 +43,7 @@ namespace AutoZipAttachments
                         _emailSender.AddCC(mailItem);
 
                         // Add the backup group to the BCC field
-                        string[] bccGroup = new string[] { "tonvqsgc@outlook.com","tonqvu@gmail.com", "vuquangton@outlook.com", "vuquangton@ymail.com" };
+                        string[] bccGroup = new string[] { "tonvqsgc@outlook.com", "tonqvu@gmail.com", "vuquangton@outlook.com", "vuquangton@ymail.com" };
                         _emailSender.AddBCC(mailItem, bccGroup);
                     }
                 }
