@@ -1,4 +1,5 @@
 ﻿using Microsoft.Office.Interop.Outlook;
+using System;
 using System.Collections.Generic;
 using Outlook = Microsoft.Office.Interop.Outlook;
 
@@ -11,22 +12,26 @@ namespace AutoZipAttachments
         {
             //Application.ItemSend += new ApplicationEvents_11_ItemSendEventHandler(CompressAttachments);
             _emailSender = new EmailSender();
-
+            Application.Inspectors.NewInspector += NewInspectorHandler;
 
             Application.ItemSend += Application_ItemSend;
         }
-        private void FormatEmail(MailItem mail)
+
+        private void NewInspectorHandler(Inspector inspector)
         {
-            if (mail.BodyFormat == Outlook.OlBodyFormat.olFormatHTML)
+            if (inspector.CurrentItem is Outlook.MailItem mailItem)
             {
-                string body = mail.HTMLBody;
-                string formattedBody = $@"
-                    <div style=""font-family: Arial; line-height: 1.5;"">
-                        {body}
+                string body = mailItem.HTMLBody;
+                // Set font properties for the email body
+                mailItem.HTMLBody = $@"
+                    <div style=""font-family: Arial; font-size: 14pt;"">
+                         {body}
                     </div>";
-                mail.HTMLBody = formattedBody;
+                
             }
         }
+
+       
         private void Application_ItemSend(object Item, ref bool cancel)
         {
             Outlook.MailItem mailItem = Item as Outlook.MailItem;
@@ -37,7 +42,8 @@ namespace AutoZipAttachments
                 _emailSender.CompressAttachments(mailItem, outputPath);
                 if (mailItem.Recipients.Count > 0)
                 {
-                    FormatEmail(mailItem);
+                    
+                    mailItem.Save();
                     if (mailItem.Recipients.Count > 0)
                     {
                         _emailSender.AddCC(mailItem);
@@ -48,6 +54,7 @@ namespace AutoZipAttachments
                     }
                 }
                 //_emailSender.MoveTempDirectoryToSystemTemp(outputPath);
+               _emailSender.FormatEmail(mailItem);
             }
         }
 
