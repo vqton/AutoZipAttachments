@@ -8,30 +8,44 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Text;
 using static System.Windows.Forms.VisualStyles.VisualStyleElement.Tab;
+using Microsoft.Office.Interop.Outlook;
 
 namespace AutoZipAttachments
 {
-    public interface IEmailSender
+    public interface IEmailFormatter
     {
-        void AddCC(Outlook.MailItem mailItem);
-        void AddBCC(Outlook.MailItem mailItem, string[] groupName);
-        void CompressAttachments(Outlook.MailItem mailItem, string outputPath);
         void FormatEmail(Outlook.MailItem mailItem);
-
     }
-    public class EmailSender : IEmailSender
+    public interface IEmailRecipientManager
     {
-
-
-
-        public EmailSender()
+        void AddCC(Outlook.MailItem mailItem, string email);
+        void AddBCC(Outlook.MailItem mailItem, string[] emails);
+    }
+    public interface IAttachmentCompressor
+    {
+        void CompressAttachments(Outlook.MailItem mailItem, string outputPath);
+    }
+    public class EmailFormatter : IEmailFormatter
+    {
+        public void FormatEmail(Outlook.MailItem mailItem)
         {
+            if (mailItem == null) return;
 
+            string plainBody = mailItem.Body;
+            string formattedBody = $@"
+                <p style=""font-family: Arial; line-height: 1.5; font-size: 14px;"">
+                    {plainBody}
+                </p>";
+            mailItem.HTMLBody = formattedBody;
+            mailItem.BodyFormat = Outlook.OlBodyFormat.olFormatHTML;
+            mailItem.HTMLBody = formattedBody;
         }
-        public void AddCC(Outlook.MailItem mailItem)
+    }
+    public class EmailRecipientManager : IEmailRecipientManager
+    {
+        public void AddCC(Outlook.MailItem mailItem, string email)
         {
-            Outlook.Recipient recipient = mailItem.Recipients.Add("ton-vq@saigonco-op.com.vn");
-
+            Outlook.Recipient recipient = mailItem.Recipients.Add(email);
             recipient.Type = (int)Outlook.OlMailRecipientType.olCC;
             recipient.Resolve();
         }
@@ -48,128 +62,67 @@ namespace AutoZipAttachments
                 }
             }
         }
-
-
-        public void FormatEmail(Outlook.MailItem mailItem)
-        {
-            return;
-            // Check if the mail item is not null
-            if (mailItem == null) return;
-
-            // Step 1: Convert the mail body to plain text
-            string plainBody = mailItem.Body;
-
-            // Step 2: Convert the plain text to HTML and apply the styles
-            string formattedBody = $@"
-                    <p style=""font-family: Arial; line-height: 1.5; font-size: 14px;"">
-                        {plainBody}
-                    </p>";
-            mailItem.HTMLBody = formattedBody;
-
-            // Set the mail item body format to HTML and assign the formatted body
-            mailItem.BodyFormat = Outlook.OlBodyFormat.olFormatHTML;
-            mailItem.HTMLBody = formattedBody;
-        }
-
-
+    }
+    public class AttachmentCompressor : IAttachmentCompressor
+    {
         public void CompressAttachments(Outlook.MailItem mailItem, string outputPath)
         {
+            const int sizeLimit = 5 * 1024 * 1024; // 5MB in bytes
+            int totalSize = 0;
 
-            const long maxAttachmentSize = 5 * 1024 * 1024; // 5MB in bytes
-
-            if (mailItem.Attachments.Count > 0)
+            // Calculate the total size of all attachments
+            foreach (Outlook.Attachment attachment in mailItem.Attachments)
             {
-                long totalSize = 0;
-                string[] excludedExtensions = new[] { ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff" };
-
-                // Calculate the total size of the attachments
-                foreach (Outlook.Attachment attachment in mailItem.Attachments)
-                {
-                    string extension = Path.GetExtension(attachment.FileName).ToLower();
-                    if (!excludedExtensions.Contains(extension))
-                    {
-                        totalSize += attachment.Size;
-                    }
-                }
-
-                // Check if the total size exceeds the threshold
-                if (totalSize > maxAttachmentSize)
-                {
-                    // Define the temporary directory on D: drive
-                    string tempDirectory = Path.Combine(@"E:\temp", Guid.NewGuid().ToString());
-                    Directory.CreateDirectory(tempDirectory);
-
-                    try
-                    {
-                        // Save each attachment to the temporary directory, excluding image files
-                        foreach (Outlook.Attachment attachment in mailItem.Attachments)
-                        {
-                            string attachmentPath = Path.Combine(tempDirectory, attachment.FileName);
-                            string extension = Path.GetExtension(attachment.FileName).ToLower();
-
-                            if (!excludedExtensions.Contains(extension))
-                            {
-                                // Ensure the filename is saved in Unicode
-                                attachment.SaveAsFile(attachmentPath);
-                            }
-                        }
-
-                        // Generate slug from the email subject
-                        string slug = GenerateSlug(mailItem.Subject);
-
-                        // Compress the non-image attachments into a zip archive using SharpCompress
-                        string archivePath = Path.Combine(outputPath, $"{slug}.zip");
-
-                        using (var archiveStream = File.OpenWrite(archivePath))
-                        using (var writer = WriterFactory.Open(archiveStream, ArchiveType.Zip, CompressionType.Deflate))
-                        {
-                            var files = Directory.EnumerateFiles(tempDirectory, "*", SearchOption.AllDirectories);
-                            foreach (var file in files)
-                            {
-                                var entryName = file.Substring(tempDirectory.Length + 1);
-                                writer.Write(entryName, file);
-                            }
-                        }
-
-                        // Verify that the compressed file was created and is not empty
-                        FileInfo archiveFileInfo = new FileInfo(archivePath);
-                        if (archiveFileInfo.Exists && archiveFileInfo.Length > 0)
-                        {
-                            // Remove original non-image attachments (iterate in reverse order)
-                            for (int i = mailItem.Attachments.Count; i > 0; i--)
-                            {
-                                Outlook.Attachment attachment = mailItem.Attachments[i];
-                                string extension = Path.GetExtension(attachment.FileName).ToLower();
-
-                                if (!excludedExtensions.Contains(extension))
-                                {
-                                    attachment.Delete();
-                                }
-                            }
-
-                            // Attach the compressed zip file
-                            mailItem.Attachments.Add(archivePath, Outlook.OlAttachmentType.olByValue, Type.Missing, Type.Missing);
-                        }
-                        else
-                        {
-                            throw new Exception("Compression failed or resulted in an empty archive.");
-                        }
-                    }
-                    finally
-                    {
-                        // Cleanup temporary files
-                        if (Directory.Exists(tempDirectory))
-                        {
-                            Directory.Delete(tempDirectory, recursive: true);
-                        }
-                    }
-                }
+                totalSize += attachment.Size;
             }
+
+            // If the total size exceeds 5MB, compress non-image attachments
+            if (totalSize > sizeLimit)
+            {
+                string tempPath = Path.GetTempPath();
+                string zipFilePath = Path.Combine(outputPath, $"{GenerateSlug(mailItem.Subject)}.zip");
+
+                using (var zipStream = new FileStream(zipFilePath, FileMode.Create))
+                using (var zipWriter = WriterFactory.Open(zipStream, ArchiveType.Zip, CompressionType.Deflate))
+                {
+                    foreach (Outlook.Attachment attachment in mailItem.Attachments)
+                    {
+                        if (!IsImageFile(attachment.FileName))
+                        {
+                            string tempFileName = Path.Combine(tempPath, attachment.FileName);
+                            attachment.SaveAsFile(tempFileName);
+
+                            string sluggedFileName = GenerateSlug(Path.GetFileNameWithoutExtension(attachment.FileName)) + Path.GetExtension(attachment.FileName);
+                            zipWriter.Write(sluggedFileName, tempFileName);
+
+                            File.Delete(tempFileName);
+                        }
+                    }
+                }
+
+                // Remove non-image attachments and add the compressed zip file
+                for (int i = mailItem.Attachments.Count; i > 0; i--)
+                {
+                    Outlook.Attachment attachment = mailItem.Attachments[i];
+                    if (!IsImageFile(attachment.FileName))
+                    {
+                        attachment.Delete();
+                    }
+                }
+
+                mailItem.Attachments.Add(zipFilePath, Outlook.OlAttachmentType.olByValue, Type.Missing, Path.GetFileName(zipFilePath));
+            }
+        }
+
+        private bool IsImageFile(string fileName)
+        {
+            string[] imageExtensions = { ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff" };
+            string fileExtension = Path.GetExtension(fileName).ToLower();
+            return imageExtensions.Contains(fileExtension);
         }
 
         private string GenerateSlug(string title)
         {
-
             if (string.IsNullOrWhiteSpace(title))
             {
                 return "attachments";
@@ -208,6 +161,43 @@ namespace AutoZipAttachments
     }
 
 
+    public class EmailSender
+    {
+        private readonly IEmailFormatter _emailFormatter;
+        private readonly IEmailRecipientManager _emailRecipientManager;
+        private readonly IAttachmentCompressor _attachmentCompressor;
 
+        public EmailSender(IEmailFormatter emailFormatter, IEmailRecipientManager emailRecipientManager, IAttachmentCompressor attachmentCompressor)
+        {
+            _emailFormatter = emailFormatter;
+            _emailRecipientManager = emailRecipientManager;
+            _attachmentCompressor = attachmentCompressor;
+        }
+
+        public void FormatEmail(Outlook.MailItem mailItem)
+        {
+            _emailFormatter.FormatEmail(mailItem);
+        }
+
+        public void AddCC(Outlook.MailItem mailItem, string email)
+        {
+            _emailRecipientManager.AddCC(mailItem, email);
+        }
+
+        public void AddBCC(Outlook.MailItem mailItem, string[] emails)
+        {
+            _emailRecipientManager.AddBCC(mailItem, emails);
+        }
+
+        public void CompressAttachments(Outlook.MailItem mailItem, string outputPath)
+        {
+            _attachmentCompressor.CompressAttachments(mailItem, outputPath);
+        }
+    }
 
 }
+
+
+
+
+
